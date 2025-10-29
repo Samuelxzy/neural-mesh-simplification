@@ -46,7 +46,7 @@ class Trainer:
             device=self.device,
         )
 
-        logger.debug("Setting up optimizer and loss...")
+        logger.info("Setting up optimizer and loss...")
         self.optimizer = Adam(
             self.model.parameters(),
             lr=config["training"]["learning_rate"],
@@ -67,7 +67,7 @@ class Trainer:
         self.checkpoint_dir = config["training"]["checkpoint_dir"]
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
-        logger.debug("Preparing data loaders...")
+        logger.info("Preparing data loaders...")
         self.train_loader, self.val_loader = self._prepare_data_loaders()
         logger.info("Trainer initialization complete.")
 
@@ -85,7 +85,7 @@ class Trainer:
             data_dir=self.config["data"]["data_dir"],
             preprocess=False,  # Can be False, because data has been prepared before training
         )
-        logger.debug(f"Dataset size: {len(dataset)}")
+        logger.info(f"Dataset size: {len(dataset)}")
 
         val_size = int(len(dataset) * self.config["data"]["val_split"])
         train_size = len(dataset) - val_size
@@ -162,10 +162,11 @@ class Trainer:
     def _train_one_epoch(self, epoch: int) -> float:
         self.model.train()
         running_loss = 0.0
-        logger.debug(f"Starting epoch {epoch + 1}")
+        logger.info(f"Starting epoch {epoch + 1}")
 
         for batch_idx, batch in enumerate(self.train_loader):
-            logger.debug(f"Processing batch {batch_idx + 1}")
+            logger.info(f"Processing batch {batch_idx + 1}")
+            batch = batch.to(self.device)
             self.optimizer.zero_grad()
             output = self.model(batch)
             loss = self.criterion(batch, output)
@@ -184,6 +185,7 @@ class Trainer:
         val_loss = 0.0
         with torch.no_grad():
             for batch in self.val_loader:
+                batch = batch.to(self.device)
                 output = self.model(batch)
                 loss = self.criterion(batch, output)
                 val_loss += loss.item()
@@ -195,7 +197,7 @@ class Trainer:
             self.checkpoint_dir, f"checkpoint_epoch_{epoch + 1}.pth"
         )
 
-        logging.debug(f"Saving checkpoint to {checkpoint_path}")
+        logging.info(f"Saving checkpoint to {checkpoint_path}")
         torch.save(
             {
                 "epoch": epoch + 1,
@@ -208,7 +210,7 @@ class Trainer:
         if val_loss < self.best_val_loss:
             self.best_val_loss = val_loss
             best_model_path = os.path.join(self.checkpoint_dir, "best_model.pth")
-            logging.debug(f"Saving best model to {best_model_path}")
+            logging.info(f"Saving best model to {best_model_path}")
             torch.save(self.model.state_dict(), best_model_path)
 
             # Remove old checkpoints to save space
@@ -252,6 +254,7 @@ class Trainer:
         }
         with torch.no_grad():
             for batch in data_loader:
+                batch = batch.to(self.device)
                 output = self.model(batch)
 
                 # TODO: Define methods that can operate on a batch instead of a trimesh object
