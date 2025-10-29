@@ -46,6 +46,7 @@ pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https
 pip install torch_cluster==1.6.3 torch_geometric==2.5.3 torch_scatter==2.1.2 torch_sparse==0.6.18 -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
 ```
 
+
 Replace “cpu” with “cu121” or the appropriate CUDA version for your system. If you don't know what is your cuda version,
 run `nvidia-smi`
 
