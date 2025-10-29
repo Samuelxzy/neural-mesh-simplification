@@ -44,6 +44,12 @@ you'll have to use the correct binaries for PyTorch and the PyTorch Geometric li
 ```bash
 pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cpu
 pip install torch_cluster==1.6.3 torch_geometric==2.5.3 torch_scatter==2.1.2 torch_sparse==0.6.18 -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
+
+or
+
+pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu121
+pip install torch_cluster==1.6.3 torch_geometric==2.5.3 torch_scatter==2.1.2 torch_sparse==0.6.18 -f https://data.pyg.org/whl/torch-2.4.0+cu121.html
+
 ```
 
 
@@ -54,6 +60,8 @@ After that you can install the remaining requirements
 
 ```bash
 pip install -r requirements.txt
+pip uninstall numpy
+pip install "numpy<2.0.0"
 pip install -e .
 ```
 
