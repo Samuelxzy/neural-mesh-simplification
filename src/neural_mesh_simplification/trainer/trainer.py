@@ -198,7 +198,7 @@ class Trainer:
             del batch, output, loss
 
             # 每处理一定数量的batch清理一次缓存
-            if batch_idx % 5 == 0 and torch.cuda.is_available():
+            if batch_idx % 3 == 0 and torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 import gc
                 gc.collect()
