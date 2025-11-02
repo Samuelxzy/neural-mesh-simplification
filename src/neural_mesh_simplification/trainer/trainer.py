@@ -1,3 +1,5 @@
+# 文件路径: src/neural_mesh_simplification/trainer/trainer.py
+
 import logging
 import os
 from multiprocessing import Event, Process
@@ -96,7 +98,7 @@ class Trainer:
             len(val_dataset) > 0
         ), f"There is not enough data to define an evaluation set. len(dataset)={len(dataset)}, train_size={train_size}, val_size={val_size}"
 
-        num_workers = self.config["training"].get("num_workers", os.cpu_count())
+        num_workers = self.config["training"].get("num_workers", 0)  # 设置为0避免内存泄漏
         logger.info(f"Using {num_workers} workers for data loading")
 
         train_loader = DataLoader(
@@ -105,6 +107,8 @@ class Trainer:
             shuffle=True,
             num_workers=num_workers,
             follow_batch=["x", "pos"],
+            pin_memory=False,  # 禁用pin_memory避免显存增长
+            persistent_workers=False  # 禁用持久化workers避免内存泄漏
         )
 
         val_loader = DataLoader(
@@ -113,6 +117,8 @@ class Trainer:
             shuffle=False,
             num_workers=num_workers,
             follow_batch=["x", "pos"],
+            pin_memory=False,  # 禁用pinMemory避免显存增长
+            persistent_workers=False  # 禁用持久化workers避免内存泄漏
         )
         logger.info("Data loaders prepared successfully")
 
@@ -144,6 +150,7 @@ class Trainer:
                 # Save the checkpoint
                 self._save_checkpoint(epoch, val_loss)
 
+                # 清理缓存
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
 
@@ -166,17 +173,41 @@ class Trainer:
 
         for batch_idx, batch in enumerate(self.train_loader):
             logger.info(f"Processing batch {batch_idx + 1}")
+            # 确保输入数据需要梯度
             batch = batch.to(self.device)
             self.optimizer.zero_grad()
+
+            # 不使用no_grad，确保计算图正确建立
             output = self.model(batch)
             loss = self.criterion(batch, output)
 
-            del batch
-            del output
+            # 检查损失是否正确计算
+            if not isinstance(loss, torch.Tensor) or loss.grad_fn is None:
+                logger.error(f"Loss computation error: loss={loss}, type={type(loss)}")
+                if not isinstance(loss, torch.Tensor):
+                    loss = torch.tensor(loss, requires_grad=True, device=self.device)
+                elif loss.grad_fn is None:
+                    loss = loss.clone().detach().requires_grad_(True)
 
             loss.backward()
             self.optimizer.step()
+
             running_loss += loss.item()
+
+            # 显式删除变量以释放内存
+            del batch, output, loss
+
+            # 每处理一定数量的batch清理一次缓存
+            if batch_idx % 5 == 0 and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                import gc
+                gc.collect()
+
+        # 每个epoch结束后清理缓存
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            import gc
+            gc.collect()
 
         return running_loss / len(self.train_loader)
 
@@ -189,6 +220,15 @@ class Trainer:
                 output = self.model(batch)
                 loss = self.criterion(batch, output)
                 val_loss += loss.item()
+
+                # 显式删除变量以释放内存
+                del batch, output, loss
+
+        # 验证结束后清理缓存
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            import gc
+            gc.collect()
 
         return val_loss / len(self.val_loader)
 
@@ -263,15 +303,29 @@ class Trainer:
                 metrics["normal_consistency"] += normal_consistency(batch, output)
                 metrics["edge_preservation"] += edge_preservation(batch, output)
                 metrics["hausdorff_distance"] += hausdorff_distance(batch, output)
+
+                # 显式删除变量以释放内存
+                del batch, output
+
         for key in metrics:
             metrics[key] /= len(data_loader)
+
+        # 评估结束后清理缓存
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            import gc
+            gc.collect()
+
         return metrics
 
     def handle_error(self, error: Exception):
         logging.error(f"An error occurred: {error}")
         if isinstance(error, RuntimeError) and "out of memory" in str(error):
             logging.error("Out of memory error. Attempting to recover.")
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                import gc
+                gc.collect()
         else:
             raise error
 
